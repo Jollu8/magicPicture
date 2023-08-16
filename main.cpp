@@ -62,8 +62,12 @@ public:
     uintType height_;
 // MIPLevel() = delete;
 
-    MIPLevel(cv::Mat &&image) : width_(image.cols), height_(image.rows), channels_(image.channels()),
-                                depth_(image.elemSize()) {
+    MIPLevel(cv::Mat &&image) {
+        levels_.emplace_back(std::move(image));
+        width_ = image.cols;
+        height_ = image.rows;
+        channels_ = image.channels();
+        depth_ = image.elemSize();
         levels_.emplace_back(std::move(image));
 
     }
@@ -158,10 +162,11 @@ class PagesData : public MIP {
 public:
     PagesData() = delete;
 
-    PagesData(const cv::Mat &image) : pixelSize_(image.channels() * image.elemSize()) {
+    PagesData(const cv::Mat &image)  {
         this->pixelPerPage_ = PagesData::pageSize / pixelSize_;
         this->pageWidth_ = std::sqrt(pixelPerPage_);
         this->pageHeight_ = pageWidth_;
+        pixelSize_ = (image.channels() * image.elemSize());
 
     }
     const auto &getData() const {
