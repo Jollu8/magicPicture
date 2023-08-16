@@ -1,8 +1,8 @@
-cmake_policy(SET CMP0042 NEW)
+
 
 cmake_minimum_required(VERSION 3.23)
 project(project)
-
+cmake_policy(SET CMP0042 NEW)
 
 find_package(OpenCV REQUIRED)
 
