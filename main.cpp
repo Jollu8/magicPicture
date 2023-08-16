@@ -12,7 +12,7 @@
 
 #define NDEBUG
 
-#define NDEBUG
+
 
 using tm_clock = std::chrono::system_clock;
 namespace fs = std::filesystem;
