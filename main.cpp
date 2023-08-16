@@ -17,8 +17,8 @@
 using tm_clock = std::chrono::system_clock;
 namespace fs = std::filesystem;
 using uintType = std::uint_fast64_t;
-const std::string path_image = "/Users/jolluemil/Desktop/Cpptasks/optional/cmake-build-debug/lena.png";
-const std::string path_outputLTX = "/Users/jolluemil/Desktop/Cpptasks/optional/cmake-build-debug/output.ltx";
+const std::string path_image = "../lena.png";
+const std::string path_outputLTX = "../output.ltx";
 
 struct Header {
     std::array<int, 12> magicNumber{};
