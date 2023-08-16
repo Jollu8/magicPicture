@@ -10,7 +10,7 @@
 #include <algorithm>
 
 
-#define NDEBUG
+//#define NDEBUG
 
 
 
