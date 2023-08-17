@@ -11,23 +11,23 @@
 #include <opencv2/opencv.hpp>
 
 
-#define NDEBUG
+//#define NDEBUG
 
 
 
 using tm_clock = std::chrono::system_clock;
 namespace fs = std::filesystem;
-using uintType = std::uint_fast64_t;
+using uintType = int;
 const std::string path_image = "../lena.png";
 const std::string path_outputLTX = "../output.ltx";
 
 struct Header {
     std::array<int, 12> magicNumber{};
     std::chrono::system_clock::time_point lastModified;
-    uint32_t width{};
-    uint32_t height{};
-    uint32_t depth{};
-    uint16_t pageResolution[3]{};
+    int width{};
+    int height{};
+    int depth{};
+    int pageResolution[3]{};
     uint32_t pageCount{};
     uint32_t pageSize{};
     uint32_t layerCount{};
@@ -55,12 +55,11 @@ public:
 
 class MIPLevel : public MIP {
     std::vector<cv::Mat> levels_;
-    uintType width_;
-
-    uintType channels_;
+    int width_;
+    int channels_;
     uintType depth_;
 public:
-    uintType height_;
+    int height_;
 // MIPLevel() = delete;
 
     MIPLevel(cv::Mat &&image) {
@@ -80,7 +79,7 @@ public:
     const cv::Mat &getFirstMat() const {
         return levels_.at(0);
     }
-    const cv::Mat &getFromIndex(int i) const {
+    const cv::Mat &getFromIndex(int  i) const {
         return levels_[i];
     }
 
@@ -120,7 +119,7 @@ public:
 
 class MIPTail : public MIP {
     uintType tailStart_;
-    uintType tailOfSet_;
+    u_long tailOfSet_;
     uintType tailSize_;
 
 public:
@@ -244,13 +243,13 @@ void fillHeader(Header &header, MIPLevel &mipLevel_, PagesData &pagesData_, MIPT
             std::log2(std::max(mipLevel_.getFirstMat().cols, mipLevel_.getFirstMat().rows)) + 1;
 // Вычисление индекса первой страницы для каждого MIP-уровня и заполнение соответствующего поля заголовка:
     int pageIndex = 0;
-    for (auto i = 0ul; i < mipLevel_.level_size(); i++) {
+    for (auto i = 0; i < mipLevel_.level_size(); i++) {
         header.mipLevelPageIndex[i] = pageIndex;
         pageIndex += std::ceil(static_cast<double>(mipLevel_.getFromIndex(i).cols) / pagesData_.getPageWidth()) *
                      std::ceil(static_cast<double>(mipLevel_.getFromIndex(i).rows) / pagesData_.getPageHeight());
     }
 
-    for (auto i = 0ul; i < mipLevel_.level_size(); i++) {
+    for (auto i = 0; i < mipLevel_.level_size(); i++) {
         auto mipWidth = mipLevel_.getFromIndex(i).cols;
         auto mipHeight = mipLevel_.getFromIndex(i).rows;
         auto pageCount =
@@ -309,8 +308,8 @@ int main() {
 // Получение информации об исходном изображении
     MIPLevel mipLevel_(std::move(image));
 
-    uintType currentWidth = mipLevel_.getWidth();
-    uintType currentHeight = mipLevel_.getHeight();
+    auto currentWidth = mipLevel_.getWidth();
+    auto currentHeight = mipLevel_.getHeight();
 
     while (currentWidth > 2 && currentHeight > 2) {
         currentWidth /= 2;
