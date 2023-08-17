@@ -4,6 +4,8 @@ cmake_minimum_required(VERSION 3.23)
 project(project)
 cmake_policy(SET CMP0042 NEW)
 
+# Укажите путь к каталогу установки OpenCV
+set(OpenCV_DIR "path/to/opencv/installation")
 find_package(OpenCV REQUIRED)
 
 option(WITH_GTEST "Whether to build google test" ON)
