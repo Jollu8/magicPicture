@@ -163,10 +163,11 @@ public:
     PagesData() = delete;
 
     PagesData(const cv::Mat &image)  {
+        pixelSize_ = (image.channels() * image.elemSize());
         this->pixelPerPage_ = pageSize / pixelSize_;
         this->pageWidth_ = std::sqrt(pixelPerPage_);
         this->pageHeight_ = pageWidth_;
-        pixelSize_ = (image.channels() * image.elemSize());
+
 
     }
     const auto &getData() const {
