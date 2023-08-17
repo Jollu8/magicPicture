@@ -11,13 +11,14 @@
 #include <opencv2/opencv.hpp>
 
 
-//#define NDEBUG
+#define NDEBUG
 
 
 
 using tm_clock = std::chrono::system_clock;
 namespace fs = std::filesystem;
 using uintType = int;
+const int PAGE_SIZE = 65536;
 const std::string path_image = "../lena.png";
 const std::string path_outputLTX = "../output.ltx";
 
@@ -57,13 +58,12 @@ class MIPLevel : public MIP {
     std::vector<cv::Mat> levels_;
     int width_;
     int channels_;
-    uintType depth_;
+    u_long depth_;
 public:
     int height_;
 // MIPLevel() = delete;
 
     MIPLevel(cv::Mat &&image) {
-        levels_.emplace_back(std::move(image));
         width_ = image.cols;
         height_ = image.rows;
         channels_ = image.channels();
@@ -79,31 +79,31 @@ public:
     const cv::Mat &getFirstMat() const {
         return levels_.at(0);
     }
-    const cv::Mat &getFromIndex(u_long i) const {
+     const cv::Mat &getFromIndex(u_long i) const {
         return levels_[i];
     }
 
-    auto level_size() const {
+    decltype(auto) level_size() const {
         return levels_.size();
     }
 
-    const auto &level_top() const {
+     const cv::Mat &level_top() const {
         return levels_.back();
     }
 
-    uintType getWidth() const {
+    decltype(auto) getWidth() const {
         return width_;
     }
 
-    uintType getHeight() const {
+    decltype(auto) getHeight() const {
         return height_;
     }
 
-    uintType getChannels() const {
+    decltype(auto) getChannels() const {
         return channels_;
     }
 
-    uintType getDepth() const {
+    decltype(auto) getDepth() const {
         return depth_;
     }
 #ifdef NDEBUG
@@ -125,13 +125,13 @@ class MIPTail : public MIP {
 public:
     MIPTail() : tailStart_(0), tailOfSet_(0), tailSize_(0) {}
 
-    auto get_tail_start() const {
+    decltype(auto) get_tail_start() const {
         return tailStart_;
     }
-    auto get_tailsOfSet() const {
+    decltype(auto) get_tailsOfSet() const {
         return tailOfSet_;
     }
-    auto get_tail_size() const {
+    decltype(auto) get_tail_size() const {
         return tailSize_;
     }
     void set_tail_size(uintType i) {
@@ -152,7 +152,7 @@ public:
 };
 
 class PagesData : public MIP {
-    const int pageSize = 65536; // Размер страницы в байтах
+     // Размер страницы в байтах
     uintType pixelSize_; // Размер пикселя в байтах
     uintType pixelPerPage_; // Количество пикселей на странице
     int pageWidth_; // Ширина страницы в пикселях
@@ -164,7 +164,7 @@ public:
 
     PagesData(const cv::Mat &image)  {
         pixelSize_ = (image.channels() * image.elemSize());
-        this->pixelPerPage_ = pageSize / pixelSize_;
+        this->pixelPerPage_ = PAGE_SIZE / pixelSize_;
         this->pageWidth_ = std::sqrt(pixelPerPage_);
         this->pageHeight_ = pageWidth_;
 
@@ -192,15 +192,13 @@ public:
     auto getPageWidth() const {
         return pageWidth_;
     }
-    auto getPageSize() const {
-        return pageSize;
-    }
+
     auto getPageDataSize() const {
         return data_.size();
     }
 #ifdef NDEBUG
     void print() const override {
-        std::cout << "Page Data size = " << pageSize << std::endl;
+        std::cout << "Page Data size = " << PAGE_SIZE << std::endl;
 
     }
 #endif
@@ -214,7 +212,6 @@ tm_clock::time_point time_lastModified(const std::filesystem::path &filePath) {
 
 }
 
-// Разбиение функции main на более мелкие функции
 void fillHeader(Header &header, MIPLevel &mipLevel_, PagesData &pagesData_, MIPTail &mipTail) {
     header.magicNumber[0] = 0xAB;
     header.magicNumber[1] = 'L';
@@ -238,7 +235,7 @@ void fillHeader(Header &header, MIPLevel &mipLevel_, PagesData &pagesData_, MIPT
     header.pageResolution[1] = pagesData_.getPageHeight();
     header.pageResolution[2] = 1; // Глубина всегда равна 1
     header.pageCount = pagesData_.getPageDataSize();
-    header.pageSize = pagesData_.getPageSize();
+    header.pageSize = PAGE_SIZE;
 // Вычисление количества MIP-уровней и заполнение соответствующего поля заголовка:
     header.mipLevelCount =
             std::log2(std::max(mipLevel_.getFirstMat().cols, mipLevel_.getFirstMat().rows)) + 1;
@@ -263,7 +260,7 @@ void fillHeader(Header &header, MIPLevel &mipLevel_, PagesData &pagesData_, MIPT
     }
     header.mipTailStart = mipTail.get_tail_start();
     mipTail.set_tailOfSet(sizeof(Header) +
-                          (header.mipLevelPageIndex[mipTail.get_tail_start()] * pagesData_.getPageSize()));
+                          (header.mipLevelPageIndex[mipTail.get_tail_start()] * PAGE_SIZE));
     header.mipTailOffset = mipTail.get_tailsOfSet();
 
     for (u_long i = mipTail.get_tail_start(); i < mipLevel_.level_size(); i++) {
@@ -272,7 +269,7 @@ void fillHeader(Header &header, MIPLevel &mipLevel_, PagesData &pagesData_, MIPT
         auto pageCount =
                 std::ceil(static_cast<double>(mipWidth) / pagesData_.getPageWidth()) *
                 std::ceil(static_cast<double>(mipHeight) / pagesData_.getPageHeight());
-        mipTail.set_tail_size(pageCount * pagesData_.getPageSize());
+        mipTail.set_tail_size(pageCount * PAGE_SIZE);
     }
     header.mipTailSize = mipTail.get_tail_size();
 
@@ -340,7 +337,7 @@ int main() {
 
                 cv::Mat page = mipLevel(roi);
 
-                std::vector<uchar> pageData(pagesData_.getPageSize(), 0);
+                std::vector<uchar> pageData(PAGE_SIZE, 0);
                 std::memcpy(pageData.data(), page.data, page.total() * pagesData_.getPixelSize());
                 pagesData_.insert(pageData);
             }
