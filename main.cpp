@@ -6,11 +6,12 @@
 #include <string>
 #include <cmath>
 #include <cstdint>
-#include <opencv2/opencv.hpp>
+#include <filesystem>
 #include <algorithm>
+#include <opencv2/opencv.hpp>
 
 
-//#define NDEBUG
+#define NDEBUG
 
 
 
@@ -109,7 +110,7 @@ public:
 #ifdef NDEBUG
 
     void print() const override {
-        for (auto i = 0; i < levels_.size(); ++i)
+        for (auto i = 0ul; i < levels_.size(); ++i)
             std::cout << "MIP уровень " << i << ": " << levels_[i].cols << "x" << levels_[i].rows << std::endl;
 
     }
@@ -243,13 +244,13 @@ void fillHeader(Header &header, MIPLevel &mipLevel_, PagesData &pagesData_, MIPT
             std::log2(std::max(mipLevel_.getFirstMat().cols, mipLevel_.getFirstMat().rows)) + 1;
 // Вычисление индекса первой страницы для каждого MIP-уровня и заполнение соответствующего поля заголовка:
     int pageIndex = 0;
-    for (int i = 0; i < mipLevel_.level_size(); i++) {
+    for (auto i = 0ul; i < mipLevel_.level_size(); i++) {
         header.mipLevelPageIndex[i] = pageIndex;
         pageIndex += std::ceil(static_cast<double>(mipLevel_.getFromIndex(i).cols) / pagesData_.getPageWidth()) *
                      std::ceil(static_cast<double>(mipLevel_.getFromIndex(i).rows) / pagesData_.getPageHeight());
     }
 
-    for (int i = 0; i < mipLevel_.level_size(); i++) {
+    for (auto i = 0ul; i < mipLevel_.level_size(); i++) {
         auto mipWidth = mipLevel_.getFromIndex(i).cols;
         auto mipHeight = mipLevel_.getFromIndex(i).rows;
         auto pageCount =
@@ -265,7 +266,7 @@ void fillHeader(Header &header, MIPLevel &mipLevel_, PagesData &pagesData_, MIPT
                           (header.mipLevelPageIndex[mipTail.get_tail_start()] * pagesData_.getPageSize()));
     header.mipTailOffset = mipTail.get_tailsOfSet();
 
-    for (int i = mipTail.get_tail_start(); i < mipLevel_.level_size(); i++) {
+    for (auto i = mipTail.get_tail_start(); i < mipLevel_.level_size(); i++) {
         auto mipWidth = mipLevel_.getFromIndex(i).cols;
         auto mipHeight = mipLevel_.height_ = mipLevel_.getFromIndex(i).rows;
         auto pageCount =
@@ -323,7 +324,7 @@ int main() {
 // Разбиение MIP уровней на страницы по 64кб
     PagesData pagesData_(mipLevel_.getFirstMat());
 
-    for (int i = 0; i < mipLevel_.level_size(); i++) {
+    for (auto i = 0; i < mipLevel_.level_size(); i++) {
 
         const cv::Mat &mipLevel = mipLevel_.getFromIndex(i);
         auto mipWidth = mipLevel.cols;
