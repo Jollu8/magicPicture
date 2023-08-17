@@ -7,18 +7,15 @@ env:
 
 jobs:
   build:
-    name: OpenCV ${{ matrix.opencv }} on ${{ matrix.os }}
+    name: ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
-        opencv: [ '3.4.0', '4.0.0', '4.5.4' ]
+
     steps:
       - uses: actions/checkout@v2
-      - name: Setup opencv
-        uses: Dovyski/setup-opencv-action@v4.5.4
-        with:
-          opencv-version: ${{ matrix.opencv }}
 
       - name: Install dependencies (Ubuntu)
         if: runner.os == 'Linux'
@@ -27,7 +24,7 @@ jobs:
       - name: Install dependencies (Windows)
         if: runner.os == 'Windows'
         run: |
-          choco install opencv --version=${{ matrix.opencv }}
+          choco install opencv --version=4.5.4
           echo "C:\Program Files\OpenCV\x64\vc15\bin" >> $GITHUB_PATH
           echo "C:\Program Files\OpenCV\x64\vc15\lib" >> $GITHUB_PATH
 
