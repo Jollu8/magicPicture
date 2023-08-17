@@ -36,3 +36,17 @@ jobs:
 
       - name: Test
         run: ctest --test-dir ${{github.workspace}}/build --build-config ${{env.BUILD_TYPE}}
+
+      # Создание пакета для Ubuntu
+      - name: Create package (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          cpack --config ${{github.workspace}}/build/CPackConfig.cmake
+          mv ${{github.workspace}}/*.deb ${{github.workspace}}/build/
+
+      # Создание пакета для Windows гребаный
+#      - name: Create package (Windows)
+#        if: runner.os == 'Windows'
+#        run: |
+#          cpack --config ${{github.workspace}}/build/CPackConfig.cmake
+#          mv ${{github.workspace}}/*.msi ${{github.workspace}}/build/
