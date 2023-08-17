@@ -1,4 +1,4 @@
-name: CMake Build Matrix
+name: "Ubuntu MIP"
 
 on: [push, pull_request]
 
@@ -12,22 +12,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ubuntu-latest
-#        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest]
 
     steps:
       - uses: actions/checkout@v2
 
       - name: Install dependencies (Ubuntu)
-        if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libopencv-dev
-
-#      - name: Install dependencies (Windows)
-#        if: runner.os == 'Windows'
-#        run: |
-#          choco install opencv --version=4.5.4
-#          echo "C:\tools\OpenCV\x64\vc15\bin" >> $GITHUB_PATH
-#          echo "C:\tools\OpenCV\x64\vc15\lib" >> $GITHUB_PATH
 
       - name: Configure CMake
         run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
@@ -40,14 +31,6 @@ jobs:
 
       # Создание пакета для Ubuntu
       - name: Create package (Ubuntu)
-        if: runner.os == 'Linux'
         run: |
           cpack --config ${{github.workspace}}/build/CPackConfig.cmake
           mv ${{github.workspace}}/*.deb ${{github.workspace}}/build/
-
-      # Создание пакета для Windows гребаный
-#      - name: Create package (Windows)
-#        if: runner.os == 'Windows'
-#        run: |
-#          cpack --config ${{github.workspace}}/build/CPackConfig.cmake
-#          mv ${{github.workspace}}/*.msi ${{github.workspace}}/build/
