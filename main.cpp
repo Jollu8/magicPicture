@@ -11,7 +11,7 @@
 #include <opencv2/opencv.hpp>
 
 
-#define NDEBUG
+//#define NDEBUG
 
 
 
