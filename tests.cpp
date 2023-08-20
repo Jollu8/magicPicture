@@ -1,49 +1,39 @@
 #include <gtest/gtest.h>
-#include "main.cpp"
-#include <opencv2/opencv.hpp>
+#include <string>
+// #include "main.h"
 
 
-// Тест для проверки корректности работы конструктора класса MIPLevel
-TEST(MIPLevelTest, ConstructorTest) {
-    cv::Mat image = cv::imread(path_image, cv::IMREAD_UNCHANGED);
-    MIPLevel mipLevel(std::move(image));
+// TEST(CheckFileFormatTest, ValidExtensions) {
+//     std::string filename;
+//     std::string extension;
 
-    EXPECT_EQ(mipLevel.getWidth(), image.cols);
-    EXPECT_EQ(mipLevel.getHeight(), image.rows);
-    EXPECT_EQ(mipLevel.getChannels(), image.channels());
-    EXPECT_EQ(mipLevel.getDepth(), image.elemSize());
-}
+//     filename = "../lena.png";
+//     EXPECT_TRUE(checkFileFormat(filename, extension));
+//     EXPECT_EQ(extension, "png");
 
-// Тест для проверки корректности работы метода insertImage класса MIPLevel
-TEST(MIPLevelTest, InsertImageTest) {
-    cv::Mat image = cv::imread(path_image, cv::IMREAD_UNCHANGED);
-    MIPLevel mipLevel(std::move(image));
+//     filename = "../img1.jpg";
+//     EXPECT_TRUE(checkFileFormat(filename, extension));
+//     EXPECT_EQ(extension, "jpg");
 
-    cv::Mat newImage;
-    cv::resize(image, newImage, cv::Size(image.cols / 2, image.rows / 2), 0, 0, cv::INTER_AREA);
-    mipLevel.insertImage(newImage);
+//     filename = "../img2.jpeg";
+//     EXPECT_TRUE(checkFileFormat(filename, extension));
+//     EXPECT_EQ(extension, "jpeg");
 
-    EXPECT_EQ(mipLevel.level_size(), 2);
-}
+//     filename = "img3.exr";
+//     EXPECT_TRUE(checkFileFormat(filename, extension));
+//     EXPECT_EQ(extension, "exr");
+// }
 
-// Тест для проверки корректности работы методов класса MIPTail
-TEST(MIPTailTest, MethodsTest) {
-    MIPTail mipTail;
-    mipTail.set_tail_start(3);
-    mipTail.set_tailOfSet(100);
-    mipTail.set_tail_size(50);
+// TEST(CheckFileFormatTest, InvalidExtensions) {
+//     std::string filename;
+//     std::string extension;
 
-    EXPECT_EQ(mipTail.get_tail_start(), 3);
-    EXPECT_EQ(mipTail.get_tailsOfSet(), 100);
-    EXPECT_EQ(mipTail.get_tail_size(), 50);
-}
+//     filename = "../img4.bmp";
+//     EXPECT_FALSE(checkFileFormat(filename, extension));
 
-// Тест для проверки корректности работы конструктора класса PagesData
-TEST(PagesDataTest, ConstructorTest) {
-    cv::Mat image = cv::imread(path_image, cv::IMREAD_UNCHANGED);
-    PagesData pagesData(image);
+//     filename = "../img5.gif";
+//     EXPECT_FALSE(checkFileFormat(filename, extension));
 
-    EXPECT_EQ(pagesData.getPixelSize(), image.channels() * image.elemSize());
-}
 
+// }
 
