@@ -2,364 +2,238 @@
 #include <fstream>
 #include <cstring>
 #include <array>
-#include <chrono>
+
 #include <string>
 #include <cmath>
 #include <cstdint>
 #include <filesystem>
 #include <algorithm>
+#include <cstdint>
 #include <opencv2/opencv.hpp>
+#include <sys/stat.h>
 
+
+bool checkFileFormat(std::string &filename, std::string &extension) ;
+
+// #include "main.h"
+using namespace std::string_literals;
 
 //#define NDEBUG
 
-
-
-using tm_clock = std::chrono::system_clock;
-namespace fs = std::filesystem;
-using uintType = int;
-const int PAGE_SIZE = 65536;
-const std::string path_image = "../lena.png";
-const std::string path_outputLTX = "../output.ltx";
-
-struct Header {
-    std::array<int, 12> magicNumber{};
-    std::chrono::system_clock::time_point lastModified;
-    int width{};
-    int height{};
-    int depth{};
-    int pageResolution[3]{};
-    uint32_t pageCount{};
-    uint32_t pageSize{};
-    uint32_t layerCount{};
-    uint8_t mipLevelCount{};
-    uint8_t mipTailStart{};
-    uint32_t mipTailOffset{};
-    uint32_t mipTailSize{};
-    uint32_t mipLevelPageIndex[16]{};
-    uint32_t format{};
-    uint8_t flags{};
-    uint8_t colorCompression[2]{};
-    uint8_t compressionType{};
-    uint8_t compressionLevel{};
-    uint32_t dataOffset{};
+struct Resolution {
+    uint16_t width;
+    uint16_t height;
+    uint16_t depth;
 };
 
-class MIP {
-public:
-    virtual ~MIP() = default;
-
-#ifdef NDEBUG
-    virtual void print() const = 0;
-#endif
+struct ColorCompression {
+    uint8_t field1;
+    uint8_t field2;
 };
 
-class MIPLevel : public MIP {
-    std::vector<cv::Mat> levels_;
-    int width_;
-    int channels_;
-    u_long depth_;
-public:
-    int height_;
-// MIPLevel() = delete;
+struct MipHeader {
+    std::array<uint8_t, 12> magicNumber;
+    time_t lastModified;
+    uint32_t width;
+    uint32_t height;
+    uint32_t depth;
+    Resolution resolution;
+    uint32_t pageCount;
+    uint32_t pageSize;
+    uint32_t layerCount;
+    uint8_t mipLevelCount;
+    uint8_t mipTailStartLevel;
+    uint32_t mipTailOffset;
+    uint32_t mipTailSize;
+    std::array<uint32_t, 16> pageIndexes;
+    std::string format;
+    uint8_t flags;
+    ColorCompression colorCompression;
+    uint8_t pageCompressionType;
+    uint8_t pageCompressionLevel;
+    uint32_t dataOffset;
 
-    MIPLevel(cv::Mat &&image) {
-        width_ = image.cols;
-        height_ = image.rows;
-        channels_ = image.channels();
-        depth_ = image.elemSize();
-        levels_.emplace_back(std::move(image));
-
+    MipHeader() {
+        magicNumber = {0xAB, 'L', 'T', 'X', 1, 0, 0, 0xBB, '\r', '\n', '\x1A', '\n'};
+        lastModified = 0; //  время последнего изменения файла исходного изображения
+        width = 0; // ширина исходного изображения
+        height = 0; // высота исходного изображения
+        depth = 1; // Глубина всегда равна 1
+        resolution = {0, 0, 1}; //  разрешение страниц
+        pageCount = 0; //  общие количество страниц
+        pageSize = 65536; // Размер страницы всегда равен 65536
+        layerCount = 1; // Количество слоев всегда равно 1
+        mipLevelCount = 0; //  число MIP уровней изображения
+        mipTailStartLevel = 0; //  номер MIP уровня начиная с которого остальные MIP уровни занимают не более одной страницы
+        mipTailOffset = 0; //  смещение в байтах относительно конца заголовка с которого начинаются данные MIP tail
+        mipTailSize = 0; //  число байт данных всех MIP tail уровней
+        pageIndexes.fill(0); // индекс первой страницы для каждого MIP уровня
+        format = ""; //  формат исходных данных (число каналов и тип)
+        flags = 0; // Флаги не используются в задании
+        colorCompression = {0, 0}; // Цветовая компрессия не используется в задании
+        pageCompressionType = 0; // Тип компрессии страниц не используется в задании. Выставляем в 0.
+        pageCompressionLevel = 0; // Степень компрессии страниц не используется в задании.
+        dataOffset = sizeof(MipHeader); // Смещение на начало данных в файле. Если не используем компрессию равно размеру заголовка.
     }
-
-    void insertImage(cv::Mat &image) {
-        levels_.emplace_back(std::move(image));
-    }
-
-    const cv::Mat &getFirstMat() const {
-        return levels_.at(0);
-    }
-     const cv::Mat &getFromIndex(u_long i) const {
-        return levels_[i];
-    }
-
-    decltype(auto) level_size() const {
-        return levels_.size();
-    }
-
-     const cv::Mat &level_top() const {
-        return levels_.back();
-    }
-
-    decltype(auto) getWidth() const {
-        return width_;
-    }
-
-    decltype(auto) getHeight() const {
-        return height_;
-    }
-
-    decltype(auto) getChannels() const {
-        return channels_;
-    }
-
-    decltype(auto) getDepth() const {
-        return depth_;
-    }
-#ifdef NDEBUG
-
-    void print() const override {
-        for (auto i = 0ul; i < levels_.size(); ++i)
-            std::cout << "MIP уровень " << i << ": " << levels_[i].cols << "x" << levels_[i].rows << std::endl;
-
-    }
-
-#endif
 };
 
-class MIPTail : public MIP {
-    uintType tailStart_;
-    u_long tailOfSet_;
-    uintType tailSize_;
 
-public:
-    MIPTail() : tailStart_(0), tailOfSet_(0), tailSize_(0) {}
-
-    decltype(auto) get_tail_start() const {
-        return tailStart_;
+time_t getLastModifiedTime(const char *filename) {
+    struct stat fileInfo;
+    if (stat(filename, &fileInfo) != 0) {
+        // Обработка ошибки
+        return 0;
     }
-    decltype(auto) get_tailsOfSet() const {
-        return tailOfSet_;
-    }
-    decltype(auto) get_tail_size() const {
-        return tailSize_;
-    }
-    void set_tail_size(uintType i) {
-        tailSize_ = i;
-    }
-    void set_tailOfSet(uintType i) {
-        tailOfSet_ = i;
-    }
-    void set_tail_start(u_long start) {
-        tailStart_ = start;
-    }
-#ifdef NDEBUG
-    void print() const override {
-        std::cout << "MIP Tail size= "<< tailSize_ <<std::endl;
-    }
-#endif
-
-};
-
-class PagesData : public MIP {
-     // Размер страницы в байтах
-    uintType pixelSize_; // Размер пикселя в байтах
-    uintType pixelPerPage_; // Количество пикселей на странице
-    int pageWidth_; // Ширина страницы в пикселях
-    int pageHeight_; // Высота страницы в пикселях
-
-    std::vector<std::vector<uchar>> data_;
-public:
-    PagesData() = delete;
-
-    PagesData(const cv::Mat &image)  {
-        pixelSize_ = (image.channels() * image.elemSize());
-        this->pixelPerPage_ = PAGE_SIZE / pixelSize_;
-        this->pageWidth_ = std::sqrt(pixelPerPage_);
-        this->pageHeight_ = pageWidth_;
-
-
-    }
-    const auto &getData() const {
-        return data_;
-    }
-    void insert(std::vector<uchar> &data) {
-        data_.emplace_back(std::move(data));
-    }
-
-    auto getPixelSize() const {
-        return pixelSize_;
-    }
-
-    auto getPixelPerPage() const {
-        return pixelPerPage_;
-    }
-
-    auto getPageHeight() const {
-        return pageHeight_;
-    }
-
-    auto getPageWidth() const {
-        return pageWidth_;
-    }
-
-    auto getPageDataSize() const {
-        return data_.size();
-    }
-#ifdef NDEBUG
-    void print() const override {
-        std::cout << "Page Data size = " << PAGE_SIZE << std::endl;
-
-    }
-#endif
-};
-
-tm_clock::time_point time_lastModified(const std::filesystem::path &filePath) {
-
-    auto ftime = fs::last_write_time(filePath);
-    return std::chrono::time_point_cast<tm_clock::duration>(
-            ftime - fs::file_time_type::clock::now() + tm_clock::now());
-
+    return fileInfo.st_mtime;
 }
 
-void fillHeader(Header &header, MIPLevel &mipLevel_, PagesData &pagesData_, MIPTail &mipTail) {
-    header.magicNumber[0] = 0xAB;
-    header.magicNumber[1] = 'L';
-    header.magicNumber[2] = 'T';
-    header.magicNumber[3] = 'X';
-    header.magicNumber[4] = 1; // major
-    header.magicNumber[5] = 0; // minor
-    header.magicNumber[6] = 0; // build
-    header.magicNumber[7] = 0xBB;
-    header.magicNumber[8] = '\r';
-    header.magicNumber[9] = '\n';
-    header.magicNumber[10] = '\x1A';
-    header.magicNumber[11] = '\n';
+Resolution fillResolution(uint32_t height, uint32_t width) {
+    Resolution resolution;
+    resolution.height = height;
+    resolution.width = width;
+    resolution.depth = 1;
+    return resolution;
+}
 
-// Заполнение остальных полей заголовка
-    header.lastModified = time_lastModified(path_image);
-    header.width = mipLevel_.getFirstMat().cols;
-    header.height = mipLevel_.getFirstMat().rows;
-    header.depth = 1; // В нашем случае всегда равна 1
-    header.pageResolution[0] = pagesData_.getPageWidth();
-    header.pageResolution[1] = pagesData_.getPageHeight();
-    header.pageResolution[2] = 1; // Глубина всегда равна 1
-    header.pageCount = pagesData_.getPageDataSize();
-    header.pageSize = PAGE_SIZE;
-// Вычисление количества MIP-уровней и заполнение соответствующего поля заголовка:
-    header.mipLevelCount =
-            std::log2(std::max(mipLevel_.getFirstMat().cols, mipLevel_.getFirstMat().rows)) + 1;
-// Вычисление индекса первой страницы для каждого MIP-уровня и заполнение соответствующего поля заголовка:
-    int pageIndex = 0;
-    for (auto i = 0ul; i < mipLevel_.level_size(); i++) {
-        header.mipLevelPageIndex[i] = pageIndex;
-        pageIndex += std::ceil(static_cast<double>(mipLevel_.getFromIndex(i).cols) / pagesData_.getPageWidth()) *
-                     std::ceil(static_cast<double>(mipLevel_.getFromIndex(i).rows) / pagesData_.getPageHeight());
+template<typename T>
+std::vector<cv::Mat_<T>> createFixedMipLevels(cv::Mat_<T> image, int numLevels = 16) {
+    std::vector<cv::Mat_<T>> mipLevels(numLevels);
+    mipLevels[0] = image;
+    for (int i = 1; i < numLevels; i++) {
+        if (mipLevels[i - 1].cols < 2 || mipLevels[i - 1].rows < 2) {
+            mipLevels[i] = cv::Mat_<T>(2, 2);
+        } else {
+            cv::resize(mipLevels[i - 1], mipLevels[i], cv::Size(), 0.5, 0.5);
+        }
+    }
+    return mipLevels;
+}
+
+
+bool checkFileFormat(std::string &filename, std::string &extension) {
+    extension = filename.substr(filename.find_last_of("."s) + 1);
+    if (extension == "exr"s || extension == "png"s || extension == "jpg" || extension == "jpeg"s) return true;
+    return false;
+}
+
+#ifdef NDEBUG
+
+void printOutputFile();
+
+#endif
+
+int main(int argc, char **argv) {
+    if (argc < 2) {
+        std::cerr << "Usage: " << argv[0] << " image" << std::endl;
+        return 1;
     }
 
-    for (auto i = 0ul; i < mipLevel_.level_size(); i++) {
-        auto mipWidth = mipLevel_.getFromIndex(i).cols;
-        auto mipHeight = mipLevel_.getFromIndex(i).rows;
-        auto pageCount =
-                std::ceil(static_cast<double>(mipWidth) / pagesData_.getPageWidth()) *
-                std::ceil(static_cast<double>(mipHeight) / pagesData_.getPageHeight());
-        if (pageCount <= 1) {
-            mipTail.set_tail_start(i);
+    std::string filename = argv[1];
+    std::string extension;
+    cv::Mat_<cv::Vec4b> image = cv::imread(filename);
+    if (checkFileFormat(filename, extension)) {
+
+        if (image.empty()) {
+            std::cerr << "Failed to read image: " << argv[1] << std::endl;
+            return 1;
+        }
+    }
+
+    auto MIPLevels = createFixedMipLevels(image);
+    MipHeader header;
+    header.lastModified = getLastModifiedTime(argv[1]);
+    header.width = image.cols;
+    header.height = image.rows;
+    header.resolution = fillResolution(image.cols, image.rows);
+    size_t dataSize = 0;
+    for (const auto &mipLevel: MIPLevels) {
+        dataSize += mipLevel.total() * mipLevel.elemSize();
+    }
+    header.pageCount = (dataSize + header.pageSize - 1) / header.pageSize;
+    header.mipLevelCount = MIPLevels.size();
+
+
+    size_t pageSize = header.pageSize;
+    for (size_t i = 0; i < MIPLevels.size(); i++) {
+        size_t mipSize = MIPLevels[i].total() * MIPLevels[i].elemSize();
+        if (mipSize <= pageSize) {
+            header.mipTailStartLevel = i;
             break;
         }
     }
-    header.mipTailStart = mipTail.get_tail_start();
-    mipTail.set_tailOfSet(sizeof(Header) +
-                          (header.mipLevelPageIndex[mipTail.get_tail_start()] * PAGE_SIZE));
-    header.mipTailOffset = mipTail.get_tailsOfSet();
-
-    for (u_long i = mipTail.get_tail_start(); i < mipLevel_.level_size(); i++) {
-        auto mipWidth = mipLevel_.getFromIndex(i).cols;
-        auto mipHeight = mipLevel_.height_ = mipLevel_.getFromIndex(i).rows;
-        auto pageCount =
-                std::ceil(static_cast<double>(mipWidth) / pagesData_.getPageWidth()) *
-                std::ceil(static_cast<double>(mipHeight) / pagesData_.getPageHeight());
-        mipTail.set_tail_size(pageCount * PAGE_SIZE);
+    header.mipTailOffset = sizeof(MipHeader);
+    size_t mipTailSize = 0;
+    for (size_t i = header.mipTailStartLevel; i < MIPLevels.size(); i++) {
+        mipTailSize += MIPLevels[i].total() * MIPLevels[i].elemSize();
     }
-    header.mipTailSize = mipTail.get_tail_size();
+    header.mipTailSize = mipTailSize;
 
-    uint32_t format = 0;
-    if (mipLevel_.getFirstMat().channels() == 1 && mipLevel_.getFirstMat().elemSize() == CV_8U)
-        format = 0; // R8
-    else if (mipLevel_.getFirstMat().channels() == 2 && mipLevel_.getFirstMat().elemSize() == CV_8U) {
-        format = 1; // RG8
-    } else if (mipLevel_.getFirstMat().channels() == 3 && mipLevel_.getFirstMat().elemSize() == CV_8U) {
-        format = 2; // RGB8
-    } else if (mipLevel_.getFirstMat().channels() == 4 && mipLevel_.getFirstMat().elemSize() == CV_8U) {
-        format = 3; // RGBA8
+    size_t pageIndex = 0;
+    for (size_t i = 0; i < MIPLevels.size(); i++) {
+        header.pageIndexes[i] = pageIndex;
+        size_t mipSize = MIPLevels[i].total() * MIPLevels[i].elemSize();
+        pageIndex += (mipSize + pageSize - 1) / pageSize;
+    }
+    header.format = extension;
+
+    std::ofstream file("output.ltx", std::ios::binary);
+    if (!file) {
+        std::cerr << "Failed to open output file" << std::endl;
+        return 1;
     }
 
-    header.format = format;
-    header.flags = 0;
-    header.colorCompression[0] = 0;
-    header.colorCompression[1] = 0;
-    header.compressionType = 0;
-    header.compressionLevel = 0;
-    header.dataOffset = sizeof(Header);
+    file.write(reinterpret_cast<const char *>(&header), sizeof(header));
+    for (const auto &mipLevel: MIPLevels) {
+        file.write(reinterpret_cast<const char *>(mipLevel.data), mipLevel.total() * mipLevel.elemSize());
+    }
+
+
+#ifdef NDEBUG
+    std::cout << "\n =========Done!=========== \n\n";
+              printOutputFile();
+#endif
+
 }
 
+#ifdef NDEBUG
 
-
-
-int main() {
-    cv::Mat image = cv::imread(path_image, cv::IMREAD_UNCHANGED);
-    if (image.empty()) {
-        std::cerr << "Ошибка при загрузке изображения" << std::endl;
-        return -1;
+void printOutputFile() {
+    std::ifstream file("../output.ltx", std::ios::binary);
+    if (!file) {
+        std::cerr << "Не удалось открыть файл output.ltx" << std::endl;
+        return;
     }
 
-// Получение информации об исходном изображении
-    MIPLevel mipLevel_(std::move(image));
+    MipHeader header;
+    file.read(reinterpret_cast<char *>(&header), sizeof(header));
 
-    auto currentWidth = mipLevel_.getWidth();
-    auto currentHeight = mipLevel_.getHeight();
+    std::cout << "Ширина: " << header.width << std::endl;
+    std::cout << "Высота: " << header.height << std::endl;
+    std::cout << "Глубина: " << header.depth << std::endl;
+    std::cout << "Разрешение: " << header.resolution.width << "x" << header.resolution.height << "x"
+              << header.resolution.depth << std::endl;
+    std::cout << "Количество страниц: " << header.pageCount << std::endl;
+    std::cout << "Размер страницы: " << header.pageSize << std::endl;
+    std::cout << "Количество слоев: " << header.layerCount << std::endl;
+    std::cout << "Количество уровней MIP: " << static_cast<int>(header.mipLevelCount) << std::endl;
+    std::cout << "Начальный уровень MIP tail: " << static_cast<int>(header.mipTailStartLevel) << std::endl;
+    std::cout << "Смещение MIP tail: " << header.mipTailOffset << std::endl;
+    std::cout << "Размер MIP tail: " << header.mipTailSize << std::endl;
 
-    while (currentWidth > 2 && currentHeight > 2) {
-        currentWidth /= 2;
-        currentHeight /= 2;
-
-        cv::Mat mipLevel;
-        cv::resize(mipLevel_.level_top(), mipLevel, cv::Size(currentWidth, currentHeight), 0, 0, cv::INTER_AREA);
-        mipLevel_.insertImage(mipLevel);
-    }
-
-// Разбиение MIP уровней на страницы по 64кб
-    PagesData pagesData_(mipLevel_.getFirstMat());
-
-    for (auto i = 0ul; i < mipLevel_.level_size(); i++) {
-
-        const cv::Mat &mipLevel = mipLevel_.getFromIndex(i);
-        auto mipWidth = mipLevel.cols;
-        auto mipHeight = mipLevel.rows;
-
-        for (int y = 0; y < mipHeight; y += pagesData_.getPageHeight()) {
-
-            for (int x = 0; x < mipWidth; x += pagesData_.getPageWidth()) {
-
-                auto roiWidth = std::min(pagesData_.getPageWidth(), mipWidth - x);
-                auto roiHeight = std::min(pagesData_.getPageHeight(), mipHeight - y);
-                cv::Rect roi(x, y, roiWidth, roiHeight);
-
-                cv::Mat page = mipLevel(roi);
-
-                std::vector<uchar> pageData(PAGE_SIZE, 0);
-                std::memcpy(pageData.data(), page.data, page.total() * pagesData_.getPixelSize());
-                pagesData_.insert(pageData);
-            }
+    for (int i = 0; i < 16; i++) {
+        if (header.pageIndexes[i] != 0) {
+            std::cout << "Индекс первой страницы для уровня MIP " << i + 1
+                      << ": " << header.pageIndexes[i] + 1
+                      << std::endl;
         }
     }
 
-    Header header = {};
-    MIPTail mipTail;
 
-    fillHeader(header, mipLevel_, pagesData_, mipTail);
-
-    std::ofstream outputFile(path_outputLTX, std::ios::binary);
-
-    if (!outputFile) {
-        std::cerr << "Ошибка при открытии выходного файла" << std::endl;
-        return -1;
-    }
-
-    outputFile.write(reinterpret_cast<const char *>(&header), sizeof(header));
-    for (const auto &pageData : pagesData_.getData()) {
-        outputFile.write(reinterpret_cast<const char *>(pageData.data()), pageData.size());
-    }
-
-    outputFile.close();
 }
+
+#endif
+
+
+
+
+
